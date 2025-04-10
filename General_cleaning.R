@@ -1,12 +1,17 @@
+library(tidyverse)
+
 movies_initial <- read_csv("TMDB_movie_dataset_v11.csv")
 
 month_translation <- c(
   Jan = "Січ", Feb = "Лют", Mar = "Бер", Apr = "Кві", May = "Тра", Jun = "Чер",
-  Jul = "Лип", Aug = "Сер", Sep = "Вер", Oct = "Жов", Nov = "Лис", Dec = "Гру"
-)
+  Jul = "Лип", Aug = "Сер", Sep = "Вер", Oct = "Жов", Nov = "Лис", Dec = "Гру")
+
+untitled_translations <- c("untitled", "без назви", "بدون عنوان", "Без названия", 
+                           "Senza Titolo", "Bez názvu", "Ohne Titel", "無題",
+                           "Sin título", "Isimsiz", "Uten tittel")
 
 revenue_to_na <- c(1407985, 1270893, 1224207, 1326885, 1294302, 1236552)
-budget_to_na <- c(1381066, 1235037, 1057999, 1022208, 
+budget_to_na <- c(1381066, 1235037, 1224207, 1057999, 1022208, 
                   1201764, 1399448, 1426913, 1449031, 1320160, 
                   1453767, 1453985, 1414861, 1398923, 1365277,
                   1417006, 1441191, 1450893, 1450893, 1301115, 1228885,
@@ -36,6 +41,11 @@ movies_clean <- movies_initial %>%
     keywords = na_if(str_trim(keywords), ""),
     genres = na_if(str_trim(genres), "")) %>%
   
+  #Untitled rows
+  mutate(
+    title = if_else(str_to_lower(title) %in% untitled_translations, NA_character_, title),
+    original_title = if_else(str_to_lower(original_title) %in% untitled_translations, NA_character_, original_title)) %>%
+  
   #Date  
   mutate(  
     release_date = gsub('"', '', release_date),
@@ -44,8 +54,8 @@ movies_clean <- movies_initial %>%
     release_year = year(release_date),
     release_month = month(release_date),
     release_day = day(release_date),
-    release_month_ua = month_translation[as.character(month(release_date, label = TRUE, abbr = TRUE))]
-  ) %>%
+    release_month_ua = month_translation[as.character(month(release_date, 
+                                                            label = TRUE, abbr = TRUE))]) %>%
   
   #Date labels
   mutate(
@@ -54,20 +64,16 @@ movies_clean <- movies_initial %>%
       release_month_ua %in% c("Кві", "Тра", "Чер") ~ "Весна",
       release_month_ua %in% c("Лип", "Сер", "Вер") ~ "Літо",
       release_month_ua %in% c("Жов", "Лис", "Гру") ~ "Осінь",
-      TRUE ~ NA_character_
-    )
-  ) %>%
+      TRUE ~ NA_character_)) %>%
   
   #Manual error correction
   mutate(
-    revenue = if_else(release_date > Sys.Date(), NA_real_, revenue)
-  ) %>%
+    revenue = if_else(release_date > Sys.Date(), NA_real_, revenue)) %>%
   
   mutate(
     revenue = if_else(id %in% revenue_to_na, NA_real_, revenue),
     budget  = if_else(id %in% budget_to_na, NA_real_, budget),
-    runtime = if_else(id %in% runtime_to_na, NA_real_, runtime)
-  ) %>%
+    runtime = if_else(id %in% runtime_to_na, NA_real_, runtime)) %>%
   
   #Unnecessary columns removal
   select(-backdrop_path, -homepage, -popularity, -poster_path, -imdb_id)
