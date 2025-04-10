@@ -143,7 +143,7 @@ revenue_yearly <- movies_released %>%
     avg_revenue = mean(revenue, na.rm = TRUE),
     med_revenue = median(revenue, na.rm = TRUE),
     std_revenue = sd(revenue, na.rm = TRUE),
-    count = count()
+    count = n()
   ) %>%
   mutate(sem_revenue = std_revenue / sqrt(count))
 
