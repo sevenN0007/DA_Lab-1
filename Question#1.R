@@ -160,7 +160,8 @@ separate_companies <- separate_companies %>%
 # сумарні бюджети для компаній
 company_budget_sum <- separate_companies %>%
   group_by(production_companies) %>%
-  filter(!production_companies %in% NA)%>%
+  filter(!is.na(production_companies))%>%
+  filter(!is.na(budget))%>%
   summarize(sum_budget = sum(budget, na.rm = TRUE), 
             movie_count = n() ) %>%
   arrange(desc(sum_budget))%>%
@@ -232,7 +233,6 @@ ggplot(new_movies, aes(x = runtime, y = budget))+
   theme_bw()+
   scale_x_continuous(labels = function(x) paste(x, "min"))+
   scale_y_continuous(labels = dollar_format(scale = 1e-6, suffix = "M"))
-
 
 
 # обмежити найбільші значення
