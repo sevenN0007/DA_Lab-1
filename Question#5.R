@@ -63,6 +63,9 @@ mutate(
 #Remove unnecessary columns
 select(-backdrop_path, -homepage, -popularity, -poster_path, -imdb_id)
 
+music_movies <- cleaned_data %>%
+  filter(str_detect(genres, "\\bMusic\\b"))
+sum(cleaned_data$vote_count >= 10, na.rm = TRUE)
 
 # Отримуємо мінімальне та максимальне значення рейтингу
 min_rating <- min(cleaned_data$vote_average, na.rm = TRUE)
@@ -75,6 +78,10 @@ cat("Максимальний рейтинг:", max_rating, "\n")
 # Підрахунок кількості фільмів з рейтингом 0, з обробкою NA
 zero_rating_count_check <- sum(cleaned_data$vote_average == 0, na.rm = TRUE)
 cat("Кількість значень рейтингу, рівних 0:", zero_rating_count_check)
+
+genre_votes <- cleaned_data %>%
+  select(title, genres, vote_average, vote_count, genres_split) %>%
+  filter(vote_count >= 10)
 
 
 ##кількість фільмів увигляді таблиці
@@ -283,3 +290,101 @@ ggplot(ratings_by_genre, aes(x = reorder(genres, rating_difference), y = rating_
     y = "Різниця оцінок (середнє - медіанне)"
   ) +
   scale_fill_gradient(low = "blue", high = "red")  # Градиєнт кольорів для різниці
+
+
+#Графіки з врахуванням, що genre_vote >= 10
+
+
+## Графік середні оцінки за жанрами
+
+# Обчислення середньої оцінки для кожного жанру
+avg_ratings <- genre_votes %>%
+  select(genres_split, vote_average) %>%
+  filter(!is.na(vote_average), vote_average > 0) %>%
+  unnest(genres_split) %>%  # Розгортаємо список
+  mutate(genres_split = str_trim(genres_split)) %>%
+  mutate(genres_split = na_if(genres_split, "")) %>%
+  filter(!is.na(genres_split)) %>%
+  group_by(genres_split) %>%
+  summarise(mean_rating_genre = mean(vote_average), .groups = "drop") %>%
+  arrange(desc(mean_rating_genre))
+
+# Побудова графіка середніх оцінок за жанрами
+ggplot(avg_ratings, aes(x = reorder(genres_split, mean_rating_genre), y = mean_rating_genre, fill = mean_rating_genre)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Середні оцінки за жанрами", 
+       x = "Жанр", 
+       y = "Середня оцінка") +
+  scale_fill_gradient(low = "blue", high = "red")
+
+##Графк різниці середньї оцінки за жанрами для всіх фільмів і для фільмів де кількість голосів >10
+
+
+genre_avg_filtered <- genre_votes %>%
+  separate_rows(genres, sep = ",\\s*") %>%
+  filter(!is.na(genres) & genres != "") %>%
+  group_by(genres) %>%
+  summarise(avg_filtered = mean(vote_average, na.rm = TRUE), .groups = "drop")
+
+genre_avg_full <- cleaned_data %>%
+  select(genres, vote_average) %>%
+  separate_rows(genres, sep = ",\\s*") %>%
+  filter(!is.na(genres) & genres != "") %>%
+  group_by(genres) %>%
+  summarise(avg_full = mean(vote_average, na.rm = TRUE), .groups = "drop")
+
+# 2. Об’єднуємо обидва датафрейми по жанру
+genre_diff <- genre_avg_filtered %>%
+  inner_join(genre_avg_full, by = "genres") %>%
+  mutate(diff = avg_filtered - avg_full) %>%
+  arrange(desc(diff))
+
+# 3. Графік
+ggplot(genre_diff, aes(x = reorder(genres, diff), y = diff)) +
+  geom_col(fill = "darkorange") +
+  coord_flip() +
+  labs(
+    title = "Різниця середньої оцінки жанру (filtered vs full dataset)",
+    x = "Жанр",
+    y = "Різниця оцінки"
+  ) +
+  theme_minimal()
+
+
+##двовимірний графік зв'язок між популярністю жанру та середнім рейтингом
+
+# 1. Розбиваємо колонку genres в окремі жанри
+genre_stats <- genre_votes %>%
+  filter(!is.na(genres), genres != "") %>%
+  mutate(genres = str_split(genres, ",\\s*")) %>%  # розділяємо по комі
+  unnest(genres) %>%  # "розгортаємо" жанри у нові рядки
+  mutate(genres = str_trim(genres))  # видаляємо зайві пробіли
+
+# 2. Рахуємо середній рейтинг і кількість шоу на кожен жанр
+genre_stats_summary <- genre_stats %>%
+  group_by(genres) %>%
+  summarise(avg_rating = mean(vote_average, na.rm = TRUE),
+            count = n(), .groups = "drop") %>%
+  arrange(desc(count)) %>%
+  mutate(genre_id = row_number(),
+         genre_label = paste0(genre_id, ". ", genres))
+
+# 3. Побудова графіку
+ggplot(genre_stats_summary, aes(x = count, y = avg_rating, size = count, color = genre_label)) +
+  geom_point(alpha = 0.7) +
+  scale_size(range = c(3, 10)) +
+  geom_text(aes(label = genre_id), vjust = -1, size = 4, color = "black") +
+  labs(title = "Зв’язок між популярністю жанру та середнім рейтингом",
+       x = "Кількість шоу у жанрі",
+       y = "Середній рейтинг",
+       size = "Кількість шоу",
+       color = "Жанр (номер)") +
+  theme_minimal() +
+  theme(legend.position = "right",
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 16, hjust = 0.5),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))
